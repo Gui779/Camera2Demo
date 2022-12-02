@@ -74,7 +74,7 @@ public class PermissionsUtils {
     //参数： requestCode  是我们自己定义的权限请求码
     //参数： permissions  是我们请求的权限名称数组
     //参数： grantResults 是我们在弹出页面后是否允许权限的标识数组，数组的长度对应的是权限名称数组的长度，数组的数据0表示允许权限，-1表示我们点击了禁止权限
-    public void onRequestPermissionsResult(Activity context, int requestCode, @NonNull String[] permissions,
+    public void onRequestPermissionsResult(String packageName, int requestCode, @NonNull String[] permissions,
                                            @NonNull int[] grantResults) {
         boolean hasPermissionDismiss = false;//有权限没有通过
         if (mRequestCode == requestCode) {
@@ -86,7 +86,7 @@ public class PermissionsUtils {
             //如果有权限没有被允许
             if (hasPermissionDismiss) {
                 if (showSystemSetting) {
-                    showSystemPermissionsSettingDialog(context);//跳转到系统设置权限页面，或者直接关闭页面，不让他继续访问
+                    showSystemPermissionsSettingDialog(packageName);//跳转到系统设置权限页面，或者直接关闭页面，不让他继续访问
                 } else {
                     mPermissionsResult.forbitPermissons();
                 }
@@ -101,22 +101,22 @@ public class PermissionsUtils {
     /**
      * 不再提示权限时的展示对话框
      */
-    AlertDialog mPermissionDialog;
+    private AlertDialog mPermissionDialog;
 
-    private void showSystemPermissionsSettingDialog(final Activity context) {
-        final String mPackName = context.getPackageName();
+    private void showSystemPermissionsSettingDialog(final String packageName) {
+
         if (mPermissionDialog == null) {
-            mPermissionDialog = new AlertDialog.Builder(context)
+            mPermissionDialog = new AlertDialog.Builder(App.getInstance().getApplicationContext())
                     .setMessage("已禁用权限，请手动授予")
                     .setPositiveButton("设置", new DialogInterface.OnClickListener() {
                         @Override
                         public void onClick(DialogInterface dialog, int which) {
                             cancelPermissionDialog();
 
-                            Uri packageURI = Uri.parse("package:" + mPackName);
+                            Uri packageURI = Uri.parse("package:" + packageName);
                             Intent intent = new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, packageURI);
-                            context.startActivity(intent);
-                            context.finish();
+                            mPermissionsResult.positiveClick(intent);
+
                         }
                     })
                     .setNegativeButton("取消", new DialogInterface.OnClickListener() {
@@ -149,6 +149,8 @@ public class PermissionsUtils {
         void passPermissons();
 
         void forbitPermissons();
+
+        void positiveClick(Intent intent);
     }
 
 }

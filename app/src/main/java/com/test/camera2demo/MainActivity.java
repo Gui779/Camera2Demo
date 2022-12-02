@@ -7,6 +7,7 @@ import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
 
 import android.Manifest;
+import android.content.Intent;
 import android.content.pm.ActivityInfo;
 import android.os.Build;
 import android.os.Bundle;
@@ -94,6 +95,13 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
             //未授权，请手动授权
 
         }
+
+        @Override
+        public void positiveClick(Intent intent) {
+            startActivity(intent);
+            finish();
+        }
+
     };
 
     @Override
@@ -101,7 +109,7 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
             permissions, @NonNull int[] grantResults) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
         //就多一个参数this
-        PermissionsUtils.getInstance().onRequestPermissionsResult(this, requestCode,
+        PermissionsUtils.getInstance().onRequestPermissionsResult(this.getPackageName(), requestCode,
                 permissions, grantResults);
 
     }
