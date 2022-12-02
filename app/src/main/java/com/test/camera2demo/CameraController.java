@@ -16,6 +16,7 @@ import android.hardware.camera2.CameraCharacteristics;
 import android.hardware.camera2.CameraDevice;
 import android.hardware.camera2.CameraManager;
 import android.hardware.camera2.CameraMetadata;
+import android.hardware.camera2.CaptureFailure;
 import android.hardware.camera2.CaptureRequest;
 import android.hardware.camera2.CaptureResult;
 import android.hardware.camera2.TotalCaptureResult;
@@ -107,7 +108,6 @@ public class CameraController {
     private String mNextVideoAbsolutePath;
 
 
-
     private CameraController() {
 
     }
@@ -134,6 +134,7 @@ public class CameraController {
 
     /**
      * 设置需要保存文件的文件夹路径
+     *
      * @param path
      */
     public void setFolderPath(String path) {
@@ -249,7 +250,7 @@ public class CameraController {
         mMediaRecorder.setVideoEncoder(MediaRecorder.VideoEncoder.H264);//设置视频编码器，用于录制
         mMediaRecorder.setAudioEncoder(MediaRecorder.AudioEncoder.AAC);//设置audio的编码格式
         int rotation = mActivity.getWindowManager().getDefaultDisplay().getRotation();
-        Log.d(TAG, "setUpMediaRecorder: "+rotation);
+        Log.d(TAG, "setUpMediaRecorder: " + rotation);
 
 
         switch (mSensorOrientation) {
@@ -296,6 +297,7 @@ public class CameraController {
                     mBackgroundHandler);
         } catch (CameraAccessException e) {
             e.printStackTrace();
+            Log.d(TAG, "lockFocus: e:" + e.getMessage());
         }
     }
 
@@ -429,7 +431,7 @@ public class CameraController {
 
                             //会话准备好后，我们开始显示预览
                             mCaptureSession = cameraCaptureSession;
-                            // 自动对焦应
+                            // 自动对焦
                             mPreviewRequestBuilder.set(CaptureRequest.CONTROL_AF_MODE,
                                     CaptureRequest.CONTROL_AF_MODE_CONTINUOUS_PICTURE);
 
@@ -464,13 +466,16 @@ public class CameraController {
         private void process(CaptureResult result) {
             switch (mState) {
                 case STATE_PREVIEW: {
+                    Log.d(TAG, "process --- STATE_PREVIEW");
                     //预览状态
                     break;
                 }
 
                 case STATE_WAITING_LOCK: {
-                    //等待对焦
+
+                    //等待对焦 afState==1：连续对焦状态；afState==2：已对焦完成。afState==4：对焦正确，并已锁定。afState==4：未能成功对焦并锁定
                     Integer afState = result.get(CaptureResult.CONTROL_AF_STATE);
+                    Log.d(TAG, "process --- STATE_WAITING_LOCK, afState：" + afState);
                     if (afState == null) {
                         captureStillPicture();
                     } else if (CaptureResult.CONTROL_AF_STATE_FOCUSED_LOCKED == afState ||
@@ -487,6 +492,7 @@ public class CameraController {
                     break;
                 }
                 case STATE_WAITING_PRECAPTURE: {
+                    Log.d(TAG, "process --- STATE_WAITING_PRECAPTURE");
                     //某些设备上的控制状态可以为空
                     Integer aeState = result.get(CaptureResult.CONTROL_AE_STATE);
                     if (aeState == null ||
@@ -497,6 +503,7 @@ public class CameraController {
                     break;
                 }
                 case STATE_WAITING_NON_PRECAPTURE: {
+                    Log.d(TAG, "process --- STATE_WAITING_NON_PRECAPTURE");
                     // CONTROL_AE_STATE can be null on some devices
                     Integer aeState = result.get(CaptureResult.CONTROL_AE_STATE);
                     if (aeState == null || aeState != CaptureResult.CONTROL_AE_STATE_PRECAPTURE) {
@@ -523,6 +530,7 @@ public class CameraController {
         }
 
     };
+
     /**
      * 拍摄静态图片。
      */
@@ -558,6 +566,7 @@ public class CameraController {
                     Log.d(TAG, mFile.toString());
                     unlockFocus();
                 }
+
             };
             //停止连续取景
             mCaptureSession.stopRepeating();
@@ -565,6 +574,8 @@ public class CameraController {
             mCaptureSession.capture(captureBuilder.build(), CaptureCallback, null);
         } catch (CameraAccessException e) {
             e.printStackTrace();
+
+            Log.d(TAG, "captureStillPicture: e:" + e.getMessage());
         }
     }
 
@@ -588,6 +599,7 @@ public class CameraController {
                     CaptureRequest.CONTROL_AE_MODE_ON_AUTO_FLASH);
         }
     }
+
     /**
      * 解锁焦点
      */
@@ -606,6 +618,7 @@ public class CameraController {
                     mBackgroundHandler);
         } catch (CameraAccessException e) {
             e.printStackTrace();
+            Log.d(TAG, "unlockFocus: e:" + e.getMessage());
         }
     }
 
@@ -726,14 +739,14 @@ public class CameraController {
                 int orientation = mActivity.getResources().getConfiguration().orientation;
                 if (orientation == Configuration.ORIENTATION_LANDSCAPE) {
                     //横屏
-                    mTextureView.setAspectRatio(mPreviewSize.getWidth(),mPreviewSize.getHeight());
-                    Log.d(TAG, "横屏: "+"width:"+mPreviewSize.getWidth()+"____height:"+mPreviewSize.getHeight());
+                    mTextureView.setAspectRatio(mPreviewSize.getWidth(), mPreviewSize.getHeight());
+                    Log.d(TAG, "横屏: " + "width:" + mPreviewSize.getWidth() + "____height:" + mPreviewSize.getHeight());
 
                 } else {
                     // 竖屏
                     mTextureView.setAspectRatio(widthPixels, heightPixels);
 
-                    Log.d(TAG, "竖屏: "+"____height:"+mPreviewSize.getHeight()+"width:"+mPreviewSize.getWidth());
+                    Log.d(TAG, "竖屏: " + "____height:" + mPreviewSize.getHeight() + "width:" + mPreviewSize.getWidth());
                 }
 
                 mMediaRecorder = new MediaRecorder();
@@ -761,6 +774,7 @@ public class CameraController {
         }
 
     }
+
     private static Size chooseOptimalSize(Size[] choices, int textureViewWidth,
                                           int textureViewHeight, int maxWidth, int maxHeight, Size aspectRatio) {
 
@@ -792,6 +806,7 @@ public class CameraController {
             return choices[0];
         }
     }
+
     private void configureTransform(int viewWidth, int viewHeight) {
         if (null == mTextureView || null == mPreviewSize) {
             return;

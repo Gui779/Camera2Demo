@@ -4,6 +4,8 @@ import androidx.annotation.NonNull;
 import androidx.annotation.RequiresApi;
 import androidx.appcompat.app.ActionBar;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.app.ActivityCompat;
+
 import android.Manifest;
 import android.content.pm.ActivityInfo;
 import android.os.Build;
@@ -49,7 +51,7 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         setContentView(R.layout.activity_main);
 
         //Activity对象
-        PermissionsUtils.getInstance().chekPermissions(this, permissions, permissionsResult);
+        PermissionsUtils.getInstance().checkPermissions(permissions, permissionsResult);
 
 
     }
@@ -65,6 +67,11 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
      * 创建监听权限的接口对象
      */
     private PermissionsUtils.IPermissionsResult permissionsResult = new PermissionsUtils.IPermissionsResult() {
+        @Override
+        public void requestPermissions(String[] permissions, int requestCode) {
+            ActivityCompat.requestPermissions(MainActivity.this, permissions, requestCode);
+        }
+
         @Override
         public void passPermissons() {
             //授权后的操作
@@ -139,7 +146,7 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
                 break;
             case R.id.video_recode_btn:
                 if (mIsRecordingVideo) {
-                    mIsRecordingVideo = !mIsRecordingVideo;
+
                     mCameraController.stopRecordingVideo();
                     mVideoRecodeBtn.setText("开始录像");
                     mVideoRecodeBtn2.setText("开始录像");
@@ -147,17 +154,17 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
                 } else {
                     mVideoRecodeBtn.setText("停止录像");
                     mVideoRecodeBtn2.setText("停止录像");
-                    mIsRecordingVideo = !mIsRecordingVideo;
                     mCameraController.startRecordingVideo();
                     Toast.makeText(this, "录像开始", Toast.LENGTH_SHORT).show();
                 }
+                mIsRecordingVideo = !mIsRecordingVideo;
+
                 break;
             case R.id.take_picture_btn2:
                 mCameraController.takePicture();
                 break;
             case R.id.video_recode_btn2:
                 if (mIsRecordingVideo) {
-                    mIsRecordingVideo = !mIsRecordingVideo;
                     mCameraController.stopRecordingVideo();
                     mVideoRecodeBtn.setText("开始录像");
                     mVideoRecodeBtn2.setText("开始录像");
@@ -165,10 +172,11 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
                 } else {
                     mVideoRecodeBtn.setText("停止录像");
                     mVideoRecodeBtn2.setText("停止录像");
-                    mIsRecordingVideo = !mIsRecordingVideo;
                     mCameraController.startRecordingVideo();
                     Toast.makeText(this, "录像开始", Toast.LENGTH_SHORT).show();
                 }
+                mIsRecordingVideo = !mIsRecordingVideo;
+
                 break;
             case R.id.v_h_screen_btn:
                 //判断当前屏幕方向

@@ -2,6 +2,7 @@ package com.test.camera2demo;
 
 import android.app.Activity;
 import android.app.AlertDialog;
+import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.pm.PackageManager;
@@ -9,6 +10,7 @@ import android.net.Uri;
 import android.os.Build;
 import android.provider.Settings;
 
+import androidx.annotation.IntRange;
 import androidx.annotation.NonNull;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
@@ -39,7 +41,7 @@ public class PermissionsUtils {
         return permissionsUtils;
     }
 
-    public void chekPermissions(Activity context, String[] permissions, @NonNull IPermissionsResult permissionsResult) {
+    public void checkPermissions(String[] permissions, @NonNull IPermissionsResult permissionsResult) {
         mPermissionsResult = permissionsResult;
 
         if (Build.VERSION.SDK_INT < 23) {//6.0才用动态权限
@@ -51,14 +53,14 @@ public class PermissionsUtils {
         List<String> mPermissionList = new ArrayList<>();
         //逐个判断你要的权限是否已经通过
         for (int i = 0; i < permissions.length; i++) {
-            if (ContextCompat.checkSelfPermission(context, permissions[i]) != PackageManager.PERMISSION_GRANTED) {
+            if (ContextCompat.checkSelfPermission(App.getInstance().getApplicationContext(), permissions[i]) != PackageManager.PERMISSION_GRANTED) {
                 mPermissionList.add(permissions[i]);//添加还未授予的权限
             }
         }
 
         //申请权限
         if (mPermissionList.size() > 0) {//有权限没有通过，需要申请
-            ActivityCompat.requestPermissions(context, permissions, mRequestCode);
+            permissionsResult.requestPermissions(permissions, mRequestCode);
         } else {
             //说明权限都已经通过，可以做你想做的事情去
             permissionsResult.passPermissons();
@@ -100,6 +102,7 @@ public class PermissionsUtils {
      * 不再提示权限时的展示对话框
      */
     AlertDialog mPermissionDialog;
+
     private void showSystemPermissionsSettingDialog(final Activity context) {
         final String mPackName = context.getPackageName();
         if (mPermissionDialog == null) {
@@ -140,6 +143,9 @@ public class PermissionsUtils {
     }
 
     public interface IPermissionsResult {
+
+        void requestPermissions(String[] permissions, int requestCode);
+
         void passPermissons();
 
         void forbitPermissons();
