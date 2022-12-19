@@ -27,12 +27,15 @@ import android.media.MediaRecorder;
 import android.os.Build;
 import android.os.Handler;
 import android.os.HandlerThread;
+import android.os.Looper;
+import android.os.Message;
 import android.util.DisplayMetrics;
 import android.util.Log;
 import android.util.Size;
 import android.util.SparseIntArray;
 import android.view.Surface;
 import android.view.TextureView;
+import android.view.WindowManager;
 import android.widget.Toast;
 
 import androidx.annotation.NonNull;
@@ -63,28 +66,48 @@ import java.util.concurrent.TimeUnit;
 public class CameraController {
 
 
-    private static final String TAG = "CameraController";
-    private static Activity mActivity;
-    private String mFolderPath; //保存视频,图片的文件夹路径
+    private static final String TAG = "CameraControllerTag";
+    //保存视频,图片的文件夹路径
+    private String mFolderPath;
     private ImageReader mImageReader;
     private HandlerThread mBackgroundThread;
     private Handler mBackgroundHandler;
+    private final int START_MEDIA_RECORDER_MSG = 1001;
+
+    private Handler mainHandler = new Handler(Looper.getMainLooper()) {
+        @Override
+        public void handleMessage(@NonNull Message msg) {
+            super.handleMessage(msg);
+            switch (msg.what) {
+                case START_MEDIA_RECORDER_MSG:
+                    //开启录像
+                    mMediaRecorder.start();
+
+                    break;
+            }
+        }
+    };
     private AutoFitTextureView mTextureView;
-    private Semaphore mCameraOpenCloseLock = new Semaphore(1);//一个信号量以防止应用程序在关闭相机之前退出。
-    private String mCameraId;//当前相机的ID。
+    private WindowManager mWindowManager;
+    private int mOrientation = -1;
+    //一个信号量以防止应用程序在关闭相机之前退出。
+    private Semaphore mCameraOpenCloseLock = new Semaphore(1);
+    //当前相机的ID
+    private String mCameraId;
     private CameraDevice mCameraDevice;
     private Size mPreviewSize;
     private CaptureRequest.Builder mPreviewRequestBuilder;
     private CameraCaptureSession mCaptureSession;
     private CaptureRequest mPreviewRequest;
-    private File mFile;//拍照储存文件
+    //拍照储存文件
+    private File mFile;
     private Integer mSensorOrientation;
     private CameraCaptureSession mPreviewSession;
     private CaptureRequest.Builder mPreviewBuilder;
-
-    private static final int MAX_PREVIEW_WIDTH = 1920;//Camera2 API保证的最大预览宽度
-
-    private static final int MAX_PREVIEW_HEIGHT = 1080;//Camera2 API保证的最大预览高度
+    //Camera2 API保证的最大预览宽度
+    private static final int MAX_PREVIEW_WIDTH = 1920;
+    //Camera2 API保证的最大预览高度
+    private static final int MAX_PREVIEW_HEIGHT = 1080;
 
     private boolean mFlashSupported;
     private int mState = STATE_PREVIEW;
@@ -99,11 +122,16 @@ public class CameraController {
 
     private static final int SENSOR_ORIENTATION_DEFAULT_DEGREES = 90;
     private static final int SENSOR_ORIENTATION_INVERSE_DEGREES = 270;
-    private static final int STATE_PREVIEW = 0;//相机状态：显示相机预览。
-    private static final int STATE_WAITING_LOCK = 1;//相机状态：等待焦点被锁定。
-    private static final int STATE_WAITING_PRECAPTURE = 2;//等待曝光被Precapture状态。
-    private static final int STATE_WAITING_NON_PRECAPTURE = 3;//相机状态：等待曝光的状态是不是Precapture。
-    private static final int STATE_PICTURE_TAKEN = 4;//相机状态：拍照。
+    //相机状态：显示相机预览
+    private static final int STATE_PREVIEW = 0;
+    //相机状态：等待焦点被锁定
+    private static final int STATE_WAITING_LOCK = 1;
+    //等待曝光被Precapture状态
+    private static final int STATE_WAITING_PRECAPTURE = 2;
+    //相机状态：等待曝光的状态是不是Precapture
+    private static final int STATE_WAITING_NON_PRECAPTURE = 3;
+    //相机状态：拍照
+    private static final int STATE_PICTURE_TAKEN = 4;
     private MediaRecorder mMediaRecorder;
     private String mNextVideoAbsolutePath;
 
@@ -117,19 +145,21 @@ public class CameraController {
 
     }
 
-    public static CameraController getInstance(Activity activity) {
-        mActivity = activity;
+    public static CameraController getInstance() {
         return ClassHolder.mInstance;
     }
 
-    public void initCamera(AutoFitTextureView textureView) {
+    public void initCamera(AutoFitTextureView textureView, WindowManager windowManager, int orientation) {
         this.mTextureView = textureView;
+        this.mWindowManager = windowManager;
+        this.mOrientation = orientation;
         startBackgroundThread();
         if (mTextureView.isAvailable()) {
             openCamera(mTextureView.getWidth(), mTextureView.getHeight());
         } else {
             mTextureView.setSurfaceTextureListener(mSurfaceTextureListener);
         }
+
     }
 
     /**
@@ -195,14 +225,7 @@ public class CameraController {
                 public void onConfigured(@NonNull CameraCaptureSession cameraCaptureSession) {
                     mPreviewSession = cameraCaptureSession;
                     updatePreview();
-                    mActivity.runOnUiThread(new Runnable() {
-                        @Override
-                        public void run() {
-
-                            //开启录像
-                            mMediaRecorder.start();
-                        }
-                    });
+                    mainHandler.sendEmptyMessage(START_MEDIA_RECORDER_MSG);
                 }
 
                 @Override
@@ -237,21 +260,29 @@ public class CameraController {
 
     private void setUpMediaRecorder() throws IOException {
 
-        mMediaRecorder.setAudioSource(MediaRecorder.AudioSource.MIC); //设置用于录制的音源
-        mMediaRecorder.setVideoSource(MediaRecorder.VideoSource.SURFACE);//开始捕捉和编码数据到setOutputFile（指定的文件）
-        mMediaRecorder.setOutputFormat(MediaRecorder.OutputFormat.MPEG_4); //设置在录制过程中产生的输出文件的格式
+        //设置用于录制的音源
+        mMediaRecorder.setAudioSource(MediaRecorder.AudioSource.MIC);
+        //开始捕捉和编码数据到setOutputFile（指定的文件）
+        mMediaRecorder.setVideoSource(MediaRecorder.VideoSource.SURFACE);
+        //设置在录制过程中产生的输出文件的格式
+        mMediaRecorder.setOutputFormat(MediaRecorder.OutputFormat.MPEG_4);
         if (mNextVideoAbsolutePath == null || mNextVideoAbsolutePath.isEmpty()) {
             mNextVideoAbsolutePath = getVideoFilePath();
         }
-        mMediaRecorder.setOutputFile(mNextVideoAbsolutePath);//设置输出文件的路径
-        mMediaRecorder.setVideoEncodingBitRate(10000000);//设置录制的视频编码比特率
-        mMediaRecorder.setVideoFrameRate(25);//设置要捕获的视频帧速率
-        mMediaRecorder.setVideoSize(mPreviewSize.getWidth(), mPreviewSize.getHeight());//设置要捕获的视频的宽度和高度
-        mMediaRecorder.setVideoEncoder(MediaRecorder.VideoEncoder.H264);//设置视频编码器，用于录制
-        mMediaRecorder.setAudioEncoder(MediaRecorder.AudioEncoder.AAC);//设置audio的编码格式
-        int rotation = mActivity.getWindowManager().getDefaultDisplay().getRotation();
-        Log.d(TAG, "setUpMediaRecorder: " + rotation);
-
+        //设置输出文件的路径
+        mMediaRecorder.setOutputFile(mNextVideoAbsolutePath);
+        //设置录制的视频编码比特率
+        mMediaRecorder.setVideoEncodingBitRate(10000000);
+        //设置要捕获的视频帧速率
+        mMediaRecorder.setVideoFrameRate(25);
+        //设置要捕获的视频的宽度和高度
+        mMediaRecorder.setVideoSize(mPreviewSize.getWidth(), mPreviewSize.getHeight());
+        //设置视频编码器，用于录制
+        mMediaRecorder.setVideoEncoder(MediaRecorder.VideoEncoder.H264);
+        //设置audio的编码格式
+        mMediaRecorder.setAudioEncoder(MediaRecorder.AudioEncoder.AAC);
+        int rotation = mWindowManager.getDefaultDisplay().getRotation();
+        Log.d(TAG, "setUpMediaRecorder-rotation: " + rotation);
 
         switch (mSensorOrientation) {
             case SENSOR_ORIENTATION_DEFAULT_DEGREES:
@@ -347,19 +378,18 @@ public class CameraController {
         setUpCameraOutputs(width, height);
         //配置变换
         configureTransform(width, height);
-        CameraManager manager = (CameraManager) mActivity.getSystemService(Context.CAMERA_SERVICE);
+        CameraManager manager = (CameraManager) App.getInstance().getApplicationContext().getSystemService(Context.CAMERA_SERVICE);
         try {
             if (!mCameraOpenCloseLock.tryAcquire(2500, TimeUnit.MILLISECONDS)) {
                 throw new RuntimeException("Time out waiting to lock camera opening.");
             }
 
-            if (ActivityCompat.checkSelfPermission(mActivity, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
+            if (ActivityCompat.checkSelfPermission(App.getInstance().getApplicationContext(), Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
 
                 return;
             }
             //打开相机预览
             manager.openCamera(mCameraId, mStateCallback, mBackgroundHandler);
-
 
         } catch (CameraAccessException e) {
             e.printStackTrace();
@@ -394,7 +424,7 @@ public class CameraController {
             mCameraOpenCloseLock.release();
             cameraDevice.close();
             mCameraDevice = null;
-            mActivity.finish();
+
         }
 
     };
@@ -552,7 +582,7 @@ public class CameraController {
             setAutoFlash(captureBuilder);
 
             // 方向
-            int rotation = mActivity.getWindowManager().getDefaultDisplay().getRotation();
+            int rotation = mWindowManager.getDefaultDisplay().getRotation();
             captureBuilder.set(CaptureRequest.JPEG_ORIENTATION, getOrientation(rotation));
 
             CameraCaptureSession.CaptureCallback CaptureCallback
@@ -562,7 +592,7 @@ public class CameraController {
                 public void onCaptureCompleted(@NonNull CameraCaptureSession session,
                                                @NonNull CaptureRequest request,
                                                @NonNull TotalCaptureResult result) {
-                    showToast("图片地址: " + mFile);
+                    ToastUtils.showToast("图片地址: " + mFile);
                     Log.d(TAG, mFile.toString());
                     unlockFocus();
                 }
@@ -579,14 +609,6 @@ public class CameraController {
         }
     }
 
-    private void showToast(final String text) {
-        mActivity.runOnUiThread(new Runnable() {
-            @Override
-            public void run() {
-                Toast.makeText(mActivity, text, Toast.LENGTH_SHORT).show();
-            }
-        });
-    }
 
     private int getOrientation(int rotation) {
 
@@ -605,15 +627,15 @@ public class CameraController {
      */
     private void unlockFocus() {
         try {
-            // 重置自动对焦
+            //重置自动对焦
             mPreviewRequestBuilder.set(CaptureRequest.CONTROL_AF_TRIGGER,
                     CameraMetadata.CONTROL_AF_TRIGGER_CANCEL);
             setAutoFlash(mPreviewRequestBuilder);
             mCaptureSession.capture(mPreviewRequestBuilder.build(), mCaptureCallback,
                     mBackgroundHandler);
-            // 将相机恢复正常的预览状态。
+            //将相机恢复正常的预览状态。
             mState = STATE_PREVIEW;
-            // 打开连续取景模式
+            //打开连续取景模式
             mCaptureSession.setRepeatingRequest(mPreviewRequest, mCaptureCallback,
                     mBackgroundHandler);
         } catch (CameraAccessException e) {
@@ -627,10 +649,10 @@ public class CameraController {
      */
     private void runPrecaptureSequence() {
         try {
-            // 这是如何告诉相机触发的。
+            //这是如何告诉相机触发的。
             mPreviewRequestBuilder.set(CaptureRequest.CONTROL_AE_PRECAPTURE_TRIGGER,
                     CaptureRequest.CONTROL_AE_PRECAPTURE_TRIGGER_START);
-            // 告诉 mCaptureCallback 等待preapture序列被设置.
+            //告诉 mCaptureCallback 等待preapture序列被设置.
             mState = STATE_WAITING_PRECAPTURE;
             mCaptureSession.capture(mPreviewRequestBuilder.build(), mCaptureCallback,
                     mBackgroundHandler);
@@ -656,7 +678,7 @@ public class CameraController {
      */
     private void setUpCameraOutputs(int width, int height) {
 
-        CameraManager manager = (CameraManager) mActivity.getSystemService(Context.CAMERA_SERVICE);
+        CameraManager manager = (CameraManager) App.getInstance().getApplicationContext().getSystemService(Context.CAMERA_SERVICE);
         //获取摄像头列表
         try {
             for (String cameraId : manager.getCameraIdList()) {
@@ -679,7 +701,7 @@ public class CameraController {
                 mImageReader.setOnImageAvailableListener(mOnImageAvailableListener, mBackgroundHandler);
                 //获取手机旋转的角度以调整图片的方向
 
-                int displayRotation = mActivity.getWindowManager().getDefaultDisplay().getRotation();
+                int displayRotation = mWindowManager.getDefaultDisplay().getRotation();
                 mSensorOrientation = characteristics.get(CameraCharacteristics.SENSOR_ORIENTATION);
                 boolean swappedDimensions = false;
 
@@ -703,7 +725,7 @@ public class CameraController {
                 }
 
                 Point displaySize = new Point();
-                mActivity.getWindowManager().getDefaultDisplay().getSize(displaySize);
+                mWindowManager.getDefaultDisplay().getSize(displaySize);
                 int rotatedPreviewWidth = width;
                 int rotatedPreviewHeight = height;
                 int maxPreviewWidth = displaySize.x;
@@ -723,9 +745,10 @@ public class CameraController {
                 if (maxPreviewHeight > MAX_PREVIEW_HEIGHT) {
                     maxPreviewHeight = MAX_PREVIEW_HEIGHT;
                 }
-
+                WindowManager wm = (WindowManager) App.getInstance().getApplicationContext().getSystemService(
+                        Context.WINDOW_SERVICE);
                 DisplayMetrics displayMetrics = new DisplayMetrics();
-                mActivity.getWindowManager().getDefaultDisplay().getMetrics(displayMetrics);
+                wm.getDefaultDisplay().getMetrics(displayMetrics);
                 int widthPixels = displayMetrics.widthPixels;
                 int heightPixels = displayMetrics.heightPixels;
                 Log.d(TAG, "widthPixels: " + widthPixels + "____heightPixels:" + heightPixels);
@@ -736,8 +759,7 @@ public class CameraController {
                         maxPreviewHeight, largest);
 
                 //我们将TextureView的宽高比与我们选择的预览大小相匹配。这样设置不会拉伸,但是不能全屏展示
-                int orientation = mActivity.getResources().getConfiguration().orientation;
-                if (orientation == Configuration.ORIENTATION_LANDSCAPE) {
+                if (mOrientation == Configuration.ORIENTATION_LANDSCAPE) {
                     //横屏
                     mTextureView.setAspectRatio(mPreviewSize.getWidth(), mPreviewSize.getHeight());
                     Log.d(TAG, "横屏: " + "width:" + mPreviewSize.getWidth() + "____height:" + mPreviewSize.getHeight());
@@ -755,8 +777,7 @@ public class CameraController {
                 return;
             }
         } catch (CameraAccessException e) {
-
-
+            Log.d(TAG, "setUpCameraOutputs-CameraAccessException: " + e.getMessage());
         }
 
     }
@@ -811,7 +832,7 @@ public class CameraController {
         if (null == mTextureView || null == mPreviewSize) {
             return;
         }
-        int rotation = mActivity.getWindowManager().getDefaultDisplay().getRotation();
+        int rotation = mWindowManager.getDefaultDisplay().getRotation();
         Matrix matrix = new Matrix();
         RectF viewRect = new RectF(0, 0, viewWidth, viewHeight);
         RectF bufferRect = new RectF(0, 0, mPreviewSize.getHeight(), mPreviewSize.getWidth());
@@ -875,5 +896,14 @@ public class CameraController {
 
     }
 
+    public void closeCamera() {
+        if (mWindowManager != null) {
+            mWindowManager = null;
+        }
+        if (mTextureView != null) {
+            mTextureView.setSurfaceTextureListener(null);
+            mTextureView = null;
+        }
+    }
 
 }

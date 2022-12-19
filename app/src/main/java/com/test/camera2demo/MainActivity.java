@@ -44,23 +44,12 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        setContentView(R.layout.activity_main);
-        ActionBar actionBar = getSupportActionBar();
-        actionBar.hide();// 去掉标题栏
-        getWindow().setFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN,
-                WindowManager.LayoutParams.FLAG_FULLSCREEN);// 设置全屏
+        getSupportActionBar().hide();// 去掉标题栏
+        getWindow().setFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN, WindowManager.LayoutParams.FLAG_FULLSCREEN);// 设置全屏
         setContentView(R.layout.activity_main);
 
         //Activity对象
         PermissionsUtils.getInstance().checkPermissions(permissions, permissionsResult);
-
-
-    }
-
-
-    @Override
-    protected void onResume() {
-        super.onResume();
 
     }
 
@@ -77,7 +66,7 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         public void passPermissons() {
             //授权后的操作
             //获取相机管理类的实例
-            mCameraController = CameraController.getInstance(MainActivity.this);
+            mCameraController = CameraController.getInstance();
             mCameraController.setFolderPath(BASE_PATH);
 
             initView();
@@ -140,7 +129,10 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
             mVerticalLinear.setVisibility(View.VISIBLE);
             mHorizontalLinear.setVisibility(View.GONE);
         }
-        mCameraController.initCamera(mTextureview);
+
+        WindowManager windowManager = getWindowManager();
+        int orientation = getResources().getConfiguration().orientation;
+        mCameraController.initCamera(mTextureview, windowManager, orientation);
 
     }
 
@@ -153,37 +145,16 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
                 mCameraController.takePicture();
                 break;
             case R.id.video_recode_btn:
-                if (mIsRecordingVideo) {
 
-                    mCameraController.stopRecordingVideo();
-                    mVideoRecodeBtn.setText("开始录像");
-                    mVideoRecodeBtn2.setText("开始录像");
-                    Toast.makeText(this, "录像结束", Toast.LENGTH_SHORT).show();
-                } else {
-                    mVideoRecodeBtn.setText("停止录像");
-                    mVideoRecodeBtn2.setText("停止录像");
-                    mCameraController.startRecordingVideo();
-                    Toast.makeText(this, "录像开始", Toast.LENGTH_SHORT).show();
-                }
-                mIsRecordingVideo = !mIsRecordingVideo;
+                recordingVideo();
 
                 break;
             case R.id.take_picture_btn2:
                 mCameraController.takePicture();
                 break;
             case R.id.video_recode_btn2:
-                if (mIsRecordingVideo) {
-                    mCameraController.stopRecordingVideo();
-                    mVideoRecodeBtn.setText("开始录像");
-                    mVideoRecodeBtn2.setText("开始录像");
-                    Toast.makeText(this, "录像结束", Toast.LENGTH_SHORT).show();
-                } else {
-                    mVideoRecodeBtn.setText("停止录像");
-                    mVideoRecodeBtn2.setText("停止录像");
-                    mCameraController.startRecordingVideo();
-                    Toast.makeText(this, "录像开始", Toast.LENGTH_SHORT).show();
-                }
-                mIsRecordingVideo = !mIsRecordingVideo;
+
+                recordingVideo();
 
                 break;
             case R.id.v_h_screen_btn:
@@ -201,5 +172,30 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         }
     }
 
+    /**
+     * 视频录像
+     */
+    private void recordingVideo(){
+        if (mIsRecordingVideo) {
+            mCameraController.stopRecordingVideo();
+            mVideoRecodeBtn.setText("开始录像");
+            mVideoRecodeBtn2.setText("开始录像");
+            Toast.makeText(this, "录像结束", Toast.LENGTH_SHORT).show();
+        } else {
+            mVideoRecodeBtn.setText("停止录像");
+            mVideoRecodeBtn2.setText("停止录像");
+            mCameraController.startRecordingVideo();
+            Toast.makeText(this, "录像开始", Toast.LENGTH_SHORT).show();
+        }
+        mIsRecordingVideo = !mIsRecordingVideo;
+    }
+
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        if (mCameraController != null) {
+            mCameraController.closeCamera();
+        }
+    }
 
 }
